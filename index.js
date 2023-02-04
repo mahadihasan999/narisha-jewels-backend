@@ -4,22 +4,22 @@ const cors = require("cors");
 const ObjectId = require("mongodb").ObjectId;
 const admin = require("firebase-admin");
 const mongoose = require("mongoose");
+const stripe = require("stripe")(
+  "sk_test_51MUxo5FnZvWI4wW0lSbOCmNWCEvKnllUXyRkLN5akt6PIrVTEYUoMoyCYBg5BrV92z5RfCRdi0fJhJOuIVYl6HXL00cIaovOUq"
+);
 const app = express();
 require("dotenv").config();
 const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-const adminsdk = "./narisha-jewels-firebase-adminsdk.json";
-
 var serviceAccount = require(process.env.NARISHA_JEWELS_ADMIN_SDK);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
+
 // console.log(process.env.NARISHA_JEWELS_ADMIN_SDK);
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.q8eugv0.mongodb.net/?retryWrites=true&w=majority`;
-
 const client = new MongoClient(uri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -43,15 +43,30 @@ async function run() {
     await client.connect();
     const database = client.db("narisha");
     const productsCollection = database.collection("products");
+    const blogsCollection = database.collection("blogs");
     const ordersCollection = database.collection("orders");
     const usersCollection = database.collection("users");
 
     // GET API
     app.get("/products", async (req, res) => {
-      const cursor = productsCollection.find({});
-      const products = await cursor.toArray();
+      const cursor = productsCollection.find().sort({ _id: -1 });
+      const page = req.query.page;
+      const size = parseInt(req.query.size);
+      let products;
+      const count = await cursor.count();
+      if (page) {
+        products = await cursor
+          .skip(page * size)
+          .limit(size)
+          .toArray();
+      } else {
+        products = await cursor.toArray();
+      }
 
-      res.send(products);
+      res.send({
+        count,
+        products,
+      });
     });
 
     app.get("/products/:id", async (req, res) => {
@@ -67,6 +82,69 @@ async function run() {
       const result = await productsCollection.insertOne(getProduct);
       console.log("got new product", req.body);
       console.log("added product", result);
+      res.json(result);
+    });
+    //Get Blogs API from here
+    app.get("/blogs", async (req, res) => {
+      const cursor = blogsCollection.find().sort({ _id: -1 });
+      const page = req.query.page;
+      const size = parseInt(req.query.size);
+      let blogs;
+      const count = await cursor.count();
+      if (page) {
+        blogs = await cursor
+          .skip(page * size)
+          .limit(size)
+          .toArray();
+      } else {
+        blogs = await cursor.toArray();
+      }
+
+      res.send({
+        count,
+        blogs,
+      });
+    });
+    app.post("/blogs", async (req, res) => {
+      const data = req.body;
+      console.log(data);
+      const result = await blogsCollection.insertOne(data);
+      res.json(result);
+    });
+
+    app.get("/blogs/:id([0-9a-fA-F]{24})", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const blogs = await blogsCollection.findOne(query);
+      // console.log('load poem with id: ', id);
+      res.send(blogs);
+    });
+    app.put("/blogs/:id", async (req, res) => {
+      const id = req.params.id;
+      const updateProducts = req.body;
+      const filter = { _id: ObjectId(id) };
+      const options = { upsert: true };
+      const handleProduct = {
+        $set: {
+          title: updateProducts.title,
+          excerpt: updateProducts.excerpt,
+          image: updateProducts.image,
+        },
+      };
+      const result = await blogsCollection.updateOne(
+        filter,
+        handleProduct,
+        options
+      );
+      console.log("updating", id);
+      res.json(result);
+    });
+    // DELETE API
+    app.delete("/blogs/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const result = await blogsCollection.deleteOne(query);
+      console.log("deleting poem with id ", result);
       res.json(result);
     });
 
@@ -103,7 +181,13 @@ async function run() {
     //     res.status(401).json({ message: "User not authorized" });
     //   }
     // });
-    //useremail
+
+    // useremail
+    app.get("/users", async (req, res) => {
+      const cursor = usersCollection.find().sort({ _id: -1 });
+      const users = await cursor.toArray();
+      res.send(users);
+    });
 
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
@@ -123,6 +207,18 @@ async function run() {
       res.json(result);
     });
 
+    app.put("/users/:id", async (req, res) => {
+      const query = req.params.id;
+      const address = req.body;
+      console.log(address);
+      const result = await usersCollection.updateOne(
+        { email: query },
+        { $set: { address: address.phone } },
+        { upsert: false, multi: true }
+      );
+      console.log("updating file with id ", result);
+      res.json(result);
+    });
     app.put("/users", async (req, res) => {
       const user = req.body;
       const filter = { email: user.email };
@@ -193,6 +289,23 @@ async function run() {
       const result = await productsCollection.deleteOne(query);
       console.log("deleting poem with id ", result);
       res.json(result);
+    });
+
+    app.post("/create-payment-intent", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = paymentInfo.price * 100;
+
+      // Create a PaymentIntent with the order amount and currency
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+
+        payment_method_types: ["card"],
+      });
+
+      res.json({
+        clientSecret: paymentIntent.client_secret,
+      });
     });
   } finally {
     // await client.close();
