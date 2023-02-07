@@ -47,7 +47,7 @@ async function run() {
     const ordersCollection = database.collection("orders");
     const usersCollection = database.collection("users");
 
-    //  *******************product section start********************************
+    // *********************product section start********************************
     app.get("/products", async (req, res) => {
       const cursor = productsCollection.find().sort({ _id: -1 });
       const page = req.query.page;
