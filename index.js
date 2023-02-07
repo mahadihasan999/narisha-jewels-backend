@@ -47,7 +47,7 @@ async function run() {
     const ordersCollection = database.collection("orders");
     const usersCollection = database.collection("users");
 
-    // GET API
+    //  *******************product section start********************************
     app.get("/products", async (req, res) => {
       const cursor = productsCollection.find().sort({ _id: -1 });
       const page = req.query.page;
@@ -84,6 +84,7 @@ async function run() {
       console.log("added product", result);
       res.json(result);
     });
+
     //Get Blogs API from here
     app.get("/blogs", async (req, res) => {
       const cursor = blogsCollection.find().sort({ _id: -1 });
@@ -105,6 +106,44 @@ async function run() {
         blogs,
       });
     });
+
+    //update API
+    app.put("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const updateProducts = req.body;
+      const filter = { _id: ObjectId(id) };
+      const options = { upsert: true };
+      const handleProduct = {
+        $set: {
+          title: updateProducts.title,
+          category: updateProducts.category,
+          description: updateProducts.description,
+          price: updateProducts.price,
+          image: updateProducts.image,
+        },
+      };
+      const result = await productsCollection.updateOne(
+        filter,
+        handleProduct,
+        options
+      );
+      console.log("updating", id);
+      res.json(result);
+    });
+
+    // DELETE API
+    app.delete("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const result = await productsCollection.deleteOne(query);
+      console.log("deleting poem with id ", result);
+      res.json(result);
+    });
+
+    //  *******************product section end********************************
+
+    //  *******************blogs section start********************************
+
     app.post("/blogs", async (req, res) => {
       const data = req.body;
       console.log(data);
@@ -127,6 +166,7 @@ async function run() {
       const handleProduct = {
         $set: {
           title: updateProducts.title,
+          summary: updateProducts.summary,
           excerpt: updateProducts.excerpt,
           image: updateProducts.image,
         },
@@ -148,6 +188,10 @@ async function run() {
       res.json(result);
     });
 
+    //  *******************blogs section end********************************
+
+    //  *******************order section start******************************
+
     app.post("/orders", async (req, res) => {
       const getOrders = req.body;
       const result = await ordersCollection.insertOne(getOrders);
@@ -160,6 +204,32 @@ async function run() {
       const cursor = ordersCollection.find().sort({ _id: -1 });
       const products = await cursor.toArray();
       res.send(products);
+    });
+    app.get("/orders/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const order = await ordersCollection.findOne(query);
+      // console.log('load poem with id: ', id);
+      res.send(order);
+    });
+    app.put("/orders/:id", async (req, res) => {
+      const id = req.params.id;
+      const status = req.body.status;
+      const filter = { _id: ObjectId(id) };
+      const options = { upsert: true };
+      const handleUpdate = {
+        $set: {
+          order_status: status,
+        },
+      };
+      const result = await ordersCollection.updateOne(
+        filter,
+        handleUpdate,
+        options
+      );
+      console.log("updating", id);
+      console.log(result);
+      res.send(result);
     });
 
     app.delete("/orders/:id", async (req, res) => {
@@ -183,6 +253,10 @@ async function run() {
     // });
 
     // useremail
+
+    //  *******************order section end********************************
+
+    //  *******************user/admin section end ********************************
     app.get("/users", async (req, res) => {
       const cursor = usersCollection.find().sort({ _id: -1 });
       const users = await cursor.toArray();
@@ -257,40 +331,9 @@ async function run() {
           .json({ message: "you do not have access to make admin" });
       }
     });
+    //  *******************user/admin section end ********************************
 
-    //update API
-    app.put("/products/:id", async (req, res) => {
-      const id = req.params.id;
-      const updateProducts = req.body;
-      const filter = { _id: ObjectId(id) };
-      const options = { upsert: true };
-      const handleProduct = {
-        $set: {
-          title: updateProducts.title,
-          category: updateProducts.category,
-          description: updateProducts.description,
-          price: updateProducts.price,
-          image: updateProducts.image,
-        },
-      };
-      const result = await productsCollection.updateOne(
-        filter,
-        handleProduct,
-        options
-      );
-      console.log("updating", id);
-      res.json(result);
-    });
-
-    // DELETE API
-    app.delete("/products/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: ObjectId(id) };
-      const result = await productsCollection.deleteOne(query);
-      console.log("deleting poem with id ", result);
-      res.json(result);
-    });
-
+    //  *******************Pyament gateway section start ********************************
     app.post("/create-payment-intent", async (req, res) => {
       const paymentInfo = req.body;
       const amount = paymentInfo.price * 100;
@@ -307,6 +350,8 @@ async function run() {
         clientSecret: paymentIntent.client_secret,
       });
     });
+
+    //  *******************Pyament gateway section end********************************
   } finally {
     // await client.close();
   }
