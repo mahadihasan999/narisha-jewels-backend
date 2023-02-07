@@ -77,6 +77,7 @@ async function run() {
       res.send(product);
     });
 
+    //Post Blogs API
     app.post("/products", async (req, res) => {
       const getProduct = req.body;
       const result = await productsCollection.insertOne(getProduct);
